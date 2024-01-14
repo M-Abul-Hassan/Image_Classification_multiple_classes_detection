@@ -1,0 +1,66 @@
+import streamlit as st
+import cv2
+import numpy as np
+from PIL import Image
+
+# Load YOLOv4 model
+yolov4_weights_path = 'yolov4.weights'
+yolov4_cfg_path = 'yolov4.cfg'
+
+net = cv2.dnn.readNet(yolov4_weights_path, yolov4_cfg_path)
+st.write(f"YOLOv4 model initialized with weights: {yolov4_weights_path}")
+classes = []
+
+with open('coco.names', 'r') as f:
+    classes = [line.strip() for line in f]
+
+# Function to perform object detection
+def detect_objects(image):
+    blob = cv2.dnn.blobFromImage(image, 1/255.0, (416, 416), swapRB=True, crop=False)
+    net.setInput(blob)
+    layer_names = net.getUnconnectedOutLayersNames()
+    detections = net.forward(layer_names)
+
+    return detections
+
+# Function to draw bounding boxes on the image
+def draw_boxes(image, detections, confidence_threshold=0.5):
+    height, width, _ = image.shape
+
+    for detection in detections:
+        for obj in detection:
+            scores = obj[5:]
+            class_id = np.argmax(scores)
+            confidence = scores[class_id]
+            if confidence > confidence_threshold:
+                print(f"Debug: class_id={class_id}, len(classes)={len(classes)}")
+                label = classes[class_id]
+                box = obj[0:4] * np.array([width, height, width, height])
+                (x, y, w, h) = box.astype("int")
+                cv2.rectangle(image, (x, y), (x + w, y + h), (0, 255, 0), 2)
+                cv2.putText(image, f"{label}: {confidence:.2f}", (x, y - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+
+# Streamlit app
+def main():
+    st.title("YOLOv4 Object Detection App")
+
+    uploaded_file = st.file_uploader("Choose an image...", type="jpg")
+
+    if uploaded_file is not None:
+        image = Image.open(uploaded_file)
+        image = np.array(image)
+
+        st.image(image, caption="Uploaded Image.", use_column_width=True)
+
+        if st.button("Detect Objects"):
+            # Perform object detection
+            detections = detect_objects(image)
+
+            # Draw bounding boxes on the image
+            draw_boxes(image, detections)
+
+            # Display results
+            st.image(image, caption="Detected Objects.", use_column_width=True)
+
+if __name__ == '__main__':
+    main()
